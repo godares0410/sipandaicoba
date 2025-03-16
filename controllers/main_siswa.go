@@ -44,13 +44,13 @@ func CreateDummyData(c *fiber.Ctx) error {
 			NamaSiswa:    fmt.Sprintf("Siswa Dummy %d", i),
 			JenisKelamin: []string{"L", "P"}[rand.Intn(2)],
 			TahunMasuk:   &tahun,
-			Foto:         toPtr(fmt.Sprintf("foto_%d.jpg", i)),
+			Foto:         toPtr(fmt.Sprintf("foto_%d.jpg", rand.Intn(6)+1)),
 			Status:       1,
 			IDSekolah:    1,
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
-		
+
 		if err := tx.Create(&siswa).Error; err != nil {
 			tx.Rollback()
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to insert data: " + err.Error()})
@@ -88,6 +88,7 @@ func GetSiswaData(c *fiber.Ctx) error {
 	type SiswaEkskul struct {
 		IDSiswa    int    `json:"id_siswa"`
 		NamaEkskul string `json:"nama_ekskul"`
+		Warna      string `json:"warna"`
 	}
 
 	var siswaList []Siswa
@@ -105,41 +106,46 @@ func GetSiswaData(c *fiber.Ctx) error {
 		Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
 		Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
 		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
-		Find(&siswaList).Error // Gunakan Find() untuk memetakan hasil query ke slice of struct
+		Find(&siswaList).Error
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Query untuk mendapatkan data ekskul siswa
+	// Query untuk mendapatkan data ekskul siswa beserta warnanya
 	err = db.Table("sub_siswa_ekskul").
-		Select("sub_siswa_ekskul.id_siswa, main_ekskul.nama_ekskul").
+		Select("sub_siswa_ekskul.id_siswa, main_ekskul.nama_ekskul, main_ekskul.warna").
 		Joins("LEFT JOIN main_ekskul ON main_ekskul.id_ekskul = sub_siswa_ekskul.id_ekskul").
-		Find(&siswaEkskulList).Error // Gunakan Find() untuk memetakan hasil query ke slice of struct
+		Find(&siswaEkskulList).Error
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Membuat map untuk menyimpan ekskul berdasarkan id_siswa
-	ekskulMap := make(map[int][]string)
+	// Membuat map untuk menyimpan ekskul beserta warnanya berdasarkan id_siswa
+	ekskulMap := make(map[int][]map[string]string)
 	for _, ekskul := range siswaEkskulList {
-		ekskulMap[ekskul.IDSiswa] = append(ekskulMap[ekskul.IDSiswa], ekskul.NamaEkskul)
+		ekskulMap[ekskul.IDSiswa] = append(ekskulMap[ekskul.IDSiswa], map[string]string{
+			"nama":  ekskul.NamaEkskul,
+			"warna": ekskul.Warna,
+		})
 	}
 
-	// Menambahkan data ekskul ke dalam data siswa
+	// Menambahkan data ekskul beserta warnanya ke dalam data siswa
 	type SiswaResponse struct {
 		Siswa
-		NamaEkskul []string `json:"nama_ekskul"`
+		Ekskul []map[string]string `json:"ekskul"`
 	}
 
 	var response []SiswaResponse
 	for _, siswa := range siswaList {
 		response = append(response, SiswaResponse{
-			Siswa:      siswa,
-			NamaEkskul: ekskulMap[siswa.IDSiswa],
+			Siswa:  siswa,
+			Ekskul: ekskulMap[siswa.IDSiswa],
 		})
 	}
 
-	return c.JSON(fiber.Map{"data_siswa": response})
+	return c.JSON(fiber.Map{
+		"data_siswa": response,
+	})
 }
