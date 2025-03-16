@@ -19,17 +19,17 @@ func CreateDummyEkskulData(c *fiber.Ctx) error {
 	}
 
 	now := time.Now()
-	tailwindColors := []string{
-		"bg-emerald-600", "bg-blue-500", "bg-red-400", "bg-yellow-300",
-		"bg-indigo-700", "bg-purple-500", "bg-pink-600", "bg-gray-400",
-		"bg-green-500", "bg-teal-600", "bg-orange-500", "bg-cyan-400",
-		"bg-lime-500", "bg-rose-600", "bg-violet-700", "bg-amber-500",
+	hexColors := []string{
+		"#10B981", "#3B82F6", "#EF4444", "#FACC15",
+		"#4F46E5", "#8B5CF6", "#EC4899", "#9CA3AF",
+		"#22C55E", "#14B8A6", "#F97316", "#06B6D4",
+		"#A3E635", "#E11D48", "#6D28D9", "#F59E0B",
 	}
 
 	for i := 1; i <= 100; i++ {
 		ekskul := models.MainEkskul{
 			NamaEkskul: fmt.Sprintf("Ekskul Dummy %d", i),
-			Warna:      tailwindColors[rand.Intn(len(tailwindColors))],
+			Warna:      hexColors[rand.Intn(len(hexColors))],
 			IDSekolah:  1,
 			CreatedAt:  now,
 			UpdatedAt:  now,

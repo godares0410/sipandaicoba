@@ -65,87 +65,116 @@ func CreateDummyData(c *fiber.Ctx) error {
 }
 
 func GetSiswaData(c *fiber.Ctx) error {
-	db := config.DB
+    db := config.DB
 
-	type Siswa struct {
-		IDSiswa      int       `json:"id_siswa"`
-		KodeSiswa    string    `json:"kode_siswa"`
-		NISN         string    `json:"nisn"`
-		NIS          string    `json:"nis"`
-		NamaSiswa    string    `json:"nama_siswa"`
-		JenisKelamin string    `json:"jenis_kelamin"`
-		TahunMasuk   int       `json:"tahun_masuk"`
-		Foto         string    `json:"foto"`
-		Status       string    `json:"status"`
-		IDSekolah    int       `json:"id_sekolah"`
-		CreatedAt    time.Time `json:"created_at"`
-		UpdatedAt    time.Time `json:"updated_at"`
-		NamaKelas    string    `json:"nama_kelas"`
-		NamaJurusan  string    `json:"nama_jurusan"`
-		NamaRombel   string    `json:"nama_rombel"`
-	}
+    page, _ := strconv.Atoi(c.Query("page", "1")) // Default page 1
+    limit := 100                                 // Data per halaman
+    offset := (page - 1) * limit                 // Hitung offset
+    searchQuery := c.Query("search", "")         // Ambil query pencarian
 
-	type SiswaEkskul struct {
-		IDSiswa    int    `json:"id_siswa"`
-		NamaEkskul string `json:"nama_ekskul"`
-		Warna      string `json:"warna"`
-	}
+    type Siswa struct {
+        IDSiswa      int       `json:"id_siswa"`
+        KodeSiswa    string    `json:"kode_siswa"`
+        NISN         string    `json:"nisn"`
+        NIS          string    `json:"nis"`
+        NamaSiswa    string    `json:"nama_siswa"`
+        JenisKelamin string    `json:"jenis_kelamin"`
+        TahunMasuk   int       `json:"tahun_masuk"`
+        Foto         string    `json:"foto"`
+        Status       string    `json:"status"`
+        IDSekolah    int       `json:"id_sekolah"`
+        CreatedAt    time.Time `json:"created_at"`
+        UpdatedAt    time.Time `json:"updated_at"`
+        NamaKelas    string    `json:"nama_kelas"`
+        NamaJurusan  string    `json:"nama_jurusan"`
+        NamaRombel   string    `json:"nama_rombel"`
+    }
 
-	var siswaList []Siswa
-	var siswaEkskulList []SiswaEkskul
+    type SiswaEkskul struct {
+        IDSiswa    int    `json:"id_siswa"`
+        NamaEkskul string `json:"nama_ekskul"`
+        Warna      string `json:"warna"`
+    }
 
-	// Query untuk mendapatkan data siswa
-	err := db.Table("main_siswa").
-		Select(`main_siswa.id_siswa, main_siswa.kode_siswa, main_siswa.nisn, main_siswa.nis, 
-	        main_siswa.nama_siswa, main_siswa.jenis_kelamin, main_siswa.tahun_masuk, 
-	        main_siswa.foto, main_siswa.status, main_siswa.id_sekolah, 
-	        main_siswa.created_at, main_siswa.updated_at, main_kelas.nama_kelas, main_jurusan.nama_jurusan, main_rombel.nama_rombel`).
-		Joins("LEFT JOIN sub_siswa_kelas ON sub_siswa_kelas.id_siswa = main_siswa.id_siswa").
-		Joins("LEFT JOIN main_kelas ON main_kelas.id_kelas = sub_siswa_kelas.id_kelas").
-		Joins("LEFT JOIN sub_siswa_jurusan ON sub_siswa_jurusan.id_siswa = main_siswa.id_siswa").
-		Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
-		Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
-		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
-		Find(&siswaList).Error
+    var siswaList []Siswa
+    var siswaEkskulList []SiswaEkskul
+    var total int64
 
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-	}
+    // Query untuk menghitung total data
+    countQuery := db.Table("main_siswa").
+        Joins("LEFT JOIN sub_siswa_kelas ON sub_siswa_kelas.id_siswa = main_siswa.id_siswa").
+        Joins("LEFT JOIN main_kelas ON main_kelas.id_kelas = sub_siswa_kelas.id_kelas").
+        Joins("LEFT JOIN sub_siswa_jurusan ON sub_siswa_jurusan.id_siswa = main_siswa.id_siswa").
+        Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
+        Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
+        Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel")
 
-	// Query untuk mendapatkan data ekskul siswa beserta warnanya
-	err = db.Table("sub_siswa_ekskul").
-		Select("sub_siswa_ekskul.id_siswa, main_ekskul.nama_ekskul, main_ekskul.warna").
-		Joins("LEFT JOIN main_ekskul ON main_ekskul.id_ekskul = sub_siswa_ekskul.id_ekskul").
-		Find(&siswaEkskulList).Error
+    if searchQuery != "" {
+        countQuery = countQuery.Where("main_siswa.nama_siswa LIKE ? OR main_siswa.nis LIKE ? OR main_siswa.nisn LIKE ?",
+            "%"+searchQuery+"%", "%"+searchQuery+"%", "%"+searchQuery+"%")
+    }
 
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-	}
+    countQuery.Count(&total)
 
-	// Membuat map untuk menyimpan ekskul beserta warnanya berdasarkan id_siswa
-	ekskulMap := make(map[int][]map[string]string)
-	for _, ekskul := range siswaEkskulList {
-		ekskulMap[ekskul.IDSiswa] = append(ekskulMap[ekskul.IDSiswa], map[string]string{
-			"nama":  ekskul.NamaEkskul,
-			"warna": ekskul.Warna,
-		})
-	}
+    // Query untuk mengambil data siswa dengan pagination dan search
+    dataQuery := db.Table("main_siswa").
+        Select(`main_siswa.id_siswa, main_siswa.kode_siswa, main_siswa.nisn, main_siswa.nis, 
+                main_siswa.nama_siswa, main_siswa.jenis_kelamin, main_siswa.tahun_masuk, 
+                main_siswa.foto, main_siswa.status, main_siswa.id_sekolah, 
+                main_siswa.created_at, main_siswa.updated_at, main_kelas.nama_kelas, main_jurusan.nama_jurusan, main_rombel.nama_rombel`).
+        Joins("LEFT JOIN sub_siswa_kelas ON sub_siswa_kelas.id_siswa = main_siswa.id_siswa").
+        Joins("LEFT JOIN main_kelas ON main_kelas.id_kelas = sub_siswa_kelas.id_kelas").
+        Joins("LEFT JOIN sub_siswa_jurusan ON sub_siswa_jurusan.id_siswa = main_siswa.id_siswa").
+        Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
+        Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
+        Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
+        Limit(limit).Offset(offset)
 
-	// Menambahkan data ekskul beserta warnanya ke dalam data siswa
-	type SiswaResponse struct {
-		Siswa
-		Ekskul []map[string]string `json:"ekskul"`
-	}
+    if searchQuery != "" {
+        dataQuery = dataQuery.Where("main_siswa.nama_siswa LIKE ? OR main_siswa.nis LIKE ? OR main_siswa.nisn LIKE ?",
+            "%"+searchQuery+"%", "%"+searchQuery+"%", "%"+searchQuery+"%")
+    }
 
-	var response []SiswaResponse
-	for _, siswa := range siswaList {
-		response = append(response, SiswaResponse{
-			Siswa:  siswa,
-			Ekskul: ekskulMap[siswa.IDSiswa],
-		})
-	}
+    err := dataQuery.Find(&siswaList).Error
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+    }
 
-	return c.JSON(fiber.Map{
-		"data_siswa": response,
-	})
+    // Query untuk mendapatkan data ekskul siswa beserta warnanya
+    err = db.Table("sub_siswa_ekskul").
+        Select("sub_siswa_ekskul.id_siswa, main_ekskul.nama_ekskul, main_ekskul.warna").
+        Joins("LEFT JOIN main_ekskul ON main_ekskul.id_ekskul = sub_siswa_ekskul.id_ekskul").
+        Find(&siswaEkskulList).Error
+
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+    }
+
+    // Membuat map untuk menyimpan ekskul beserta warnanya berdasarkan id_siswa
+    ekskulMap := make(map[int][]map[string]string)
+    for _, ekskul := range siswaEkskulList {
+        ekskulMap[ekskul.IDSiswa] = append(ekskulMap[ekskul.IDSiswa], map[string]string{
+            "nama":  ekskul.NamaEkskul,
+            "warna": ekskul.Warna,
+        })
+    }
+
+    // Menambahkan data ekskul beserta warnanya ke dalam data siswa
+    type SiswaResponse struct {
+        Siswa
+        Ekskul []map[string]string `json:"ekskul"`
+    }
+
+    var response []SiswaResponse
+    for _, siswa := range siswaList {
+        response = append(response, SiswaResponse{
+            Siswa:  siswa,
+            Ekskul: ekskulMap[siswa.IDSiswa],
+        })
+    }
+
+    return c.JSON(fiber.Map{
+        "data_siswa": response,
+        "total":      total, // Total data untuk pagination
+    })
 }
