@@ -50,7 +50,7 @@ func CreateDummyData(c *fiber.Ctx) error {
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
-
+		
 		if err := tx.Create(&siswa).Error; err != nil {
 			tx.Rollback()
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to insert data: " + err.Error()})
@@ -66,15 +66,6 @@ func CreateDummyData(c *fiber.Ctx) error {
 
 func GetSiswaData(c *fiber.Ctx) error {
 	db := config.DB
-
-	// Ambil parameter query untuk pagination
-	page := c.Query("page", "1")     // default ke halaman 1
-	limit := c.Query("limit", "100") // default ke 100 data per halaman
-
-	pageInt, _ := strconv.Atoi(page)
-	limitInt, _ := strconv.Atoi(limit)
-
-	offset := (pageInt - 1) * limitInt
 
 	type Siswa struct {
 		IDSiswa      int       `json:"id_siswa"`
@@ -94,8 +85,15 @@ func GetSiswaData(c *fiber.Ctx) error {
 		NamaRombel   string    `json:"nama_rombel"`
 	}
 
-	var siswaList []Siswa
+	type SiswaEkskul struct {
+		IDSiswa    int    `json:"id_siswa"`
+		NamaEkskul string `json:"nama_ekskul"`
+	}
 
+	var siswaList []Siswa
+	var siswaEkskulList []SiswaEkskul
+
+	// Query untuk mendapatkan data siswa
 	err := db.Table("main_siswa").
 		Select(`main_siswa.id_siswa, main_siswa.kode_siswa, main_siswa.nisn, main_siswa.nis, 
 	        main_siswa.nama_siswa, main_siswa.jenis_kelamin, main_siswa.tahun_masuk, 
@@ -107,13 +105,41 @@ func GetSiswaData(c *fiber.Ctx) error {
 		Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
 		Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
 		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
-		Limit(limitInt).
-		Offset(offset).
-		Find(&siswaList).Error
+		Find(&siswaList).Error // Gunakan Find() untuk memetakan hasil query ke slice of struct
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.JSON(fiber.Map{"data_siswa": siswaList})
+	// Query untuk mendapatkan data ekskul siswa
+	err = db.Table("sub_siswa_ekskul").
+		Select("sub_siswa_ekskul.id_siswa, main_ekskul.nama_ekskul").
+		Joins("LEFT JOIN main_ekskul ON main_ekskul.id_ekskul = sub_siswa_ekskul.id_ekskul").
+		Find(&siswaEkskulList).Error // Gunakan Find() untuk memetakan hasil query ke slice of struct
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Membuat map untuk menyimpan ekskul berdasarkan id_siswa
+	ekskulMap := make(map[int][]string)
+	for _, ekskul := range siswaEkskulList {
+		ekskulMap[ekskul.IDSiswa] = append(ekskulMap[ekskul.IDSiswa], ekskul.NamaEkskul)
+	}
+
+	// Menambahkan data ekskul ke dalam data siswa
+	type SiswaResponse struct {
+		Siswa
+		NamaEkskul []string `json:"nama_ekskul"`
+	}
+
+	var response []SiswaResponse
+	for _, siswa := range siswaList {
+		response = append(response, SiswaResponse{
+			Siswa:      siswa,
+			NamaEkskul: ekskulMap[siswa.IDSiswa],
+		})
+	}
+
+	return c.JSON(fiber.Map{"data_siswa": response})
 }
