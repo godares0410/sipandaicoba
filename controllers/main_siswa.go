@@ -71,6 +71,8 @@ func GetSiswaData(c *fiber.Ctx) error {
     limit := 100                                 // Data per halaman
     offset := (page - 1) * limit                 // Hitung offset
     searchQuery := c.Query("search", "")         // Ambil query pencarian
+    sortBy := c.Query("sort", "nama_siswa")      // Kolom yang diurutkan (default: nama_siswa)
+    order := c.Query("order", "asc")             // Urutan (asc atau desc)
 
     type Siswa struct {
         IDSiswa      int       `json:"id_siswa"`
@@ -116,7 +118,7 @@ func GetSiswaData(c *fiber.Ctx) error {
 
     countQuery.Count(&total)
 
-    // Query untuk mengambil data siswa dengan pagination dan search
+    // Query untuk mengambil data siswa dengan pagination, search, dan sorting
     dataQuery := db.Table("main_siswa").
         Select(`main_siswa.id_siswa, main_siswa.kode_siswa, main_siswa.nisn, main_siswa.nis, 
                 main_siswa.nama_siswa, main_siswa.jenis_kelamin, main_siswa.tahun_masuk, 
@@ -128,6 +130,7 @@ func GetSiswaData(c *fiber.Ctx) error {
         Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
         Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
         Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
+        Order(fmt.Sprintf("%s %s", sortBy, order)). // Tambahkan sorting
         Limit(limit).Offset(offset)
 
     if searchQuery != "" {
