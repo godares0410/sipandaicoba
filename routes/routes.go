@@ -12,6 +12,7 @@ func SetupRoutes(app *fiber.App) {
 	})
 
 	app.Get("/siswa", controllers.GetSiswaData)
+	app.Get("/idsiswa", controllers.GetAllStudentIDs)
 	app.Post("/dummy", controllers.CreateDummyData)
 	app.Post("/dummyjurusan", controllers.CreateDummyMainJurusanData)
 	app.Post("/dummyekskul", controllers.CreateDummyEkskulData)

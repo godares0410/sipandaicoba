@@ -181,3 +181,42 @@ func GetSiswaData(c *fiber.Ctx) error {
         "total":      total, // Total data untuk pagination
     })
 }
+
+func GetAllStudentIDs(c *fiber.Ctx) error {
+	db := config.DB
+	searchQuery := c.Query("search", "")
+
+	type IDResult struct {
+		IDSiswa int `json:"id_siswa"`
+	}
+
+	var ids []IDResult
+
+	query := db.Table("main_siswa").Select("id_siswa").Order("id_siswa ASC")
+
+	if searchQuery != "" {
+		// Try to convert search query to integer for ID search
+		if idSearch, err := strconv.Atoi(searchQuery); err == nil {
+			query = query.Where("id_siswa = ?", idSearch)
+		} else {
+			// If search query is not a number, return empty result
+			return c.JSON(fiber.Map{
+				"data": []int{},
+			})
+		}
+	}
+
+	if err := query.Find(&ids).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Convert to simple slice of IDs
+	idList := make([]int, len(ids))
+	for i, item := range ids {
+		idList[i] = item.IDSiswa
+	}
+
+	return c.JSON(fiber.Map{
+		"data": idList,
+	})
+}
