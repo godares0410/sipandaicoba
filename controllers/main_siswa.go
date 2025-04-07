@@ -68,6 +68,7 @@ func CreateDummyData(c *fiber.Ctx) error {
 
 func GetSiswaData(c *fiber.Ctx) error {
 	db := config.DB
+    status := c.Params("status")
 
 	page, _ := strconv.Atoi(c.Query("page", "1")) // Default page 1
 	limit := 100                                  // Data per halaman
@@ -112,7 +113,7 @@ func GetSiswaData(c *fiber.Ctx) error {
 		Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
 		Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
 		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
-		Where("main_siswa.status = 1")
+		Where("main_siswa.status = ?", status)
 
 	if searchQuery != "" {
 		countQuery = countQuery.Where("main_siswa.nama_siswa LIKE ? OR main_siswa.nis LIKE ? OR main_siswa.nisn LIKE ?",
@@ -133,7 +134,7 @@ func GetSiswaData(c *fiber.Ctx) error {
 		Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
 		Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
 		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
-        Where("main_siswa.status = 1").
+        Where("main_siswa.status = ?", status).
 		Order(fmt.Sprintf("%s %s", sortBy, order)). // Tambahkan sorting
 		Limit(limit).Offset(offset)
 
@@ -189,6 +190,7 @@ func GetSiswaData(c *fiber.Ctx) error {
 // Get all student data for export
 func GetAllSiswaForExport(c *fiber.Ctx) error {
     db := config.DB
+    status := c.Params("status")
 
     type Ekskul struct {
         Nama  string `json:"nama"`
@@ -240,7 +242,7 @@ func GetAllSiswaForExport(c *fiber.Ctx) error {
         Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
         Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
         Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
-        Where("main_siswa.status = 1").
+        Where("main_siswa.status = ?", status).
         Find(&siswaList).Error; err != nil {
         return c.Status(500).JSON(fiber.Map{"error": err.Error()})
     }
@@ -299,9 +301,10 @@ func GetAllSiswaForExport(c *fiber.Ctx) error {
 // Get all student IDs
 func GetAllStudentIDs(c *fiber.Ctx) error {
 	db := config.DB
+    status := c.Params("status")
 
 	var ids []int
-	query := db.Table("main_siswa").Where("status = 1").Pluck("id_siswa", &ids)
+	query := db.Table("main_siswa").Where("status = ?", status).Pluck("id_siswa", &ids)
 
 	if err := query.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -315,40 +318,52 @@ func GetAllStudentIDs(c *fiber.Ctx) error {
 	})
 }
 
-func UpdateStatusSiswaToInactive(c *fiber.Ctx) error {
+func UpdateStatusSiswa(c *fiber.Ctx) error {
 	db := config.DB
 
-	// Ambil semua query id (meskipun hanya 1 id tetap akan masuk slice)
-	queryArgs := c.Request().URI().QueryArgs()
-	var ids []int
+	// Ambil status dari parameter dan konversi ke int
+	status := c.Params("status")
+	statusInt, err := strconv.Atoi(status)
+	if err != nil || (statusInt != 0 && statusInt != 1) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Parameter status harus berupa 0 atau 1.",
+		})
+	}
 
-	queryArgs.VisitAll(func(key, value []byte) {
-		if string(key) == "id" {
-			id, err := strconv.Atoi(string(value))
-			if err == nil {
-				ids = append(ids, id)
-			}
-		}
-	})
+	// Hitung status baru yang akan diset (toggle)
+	newStatus := 1 - statusInt
 
-	// Cek apakah ada id yang valid
+	// Ambil data dari body
+	var requestBody struct {
+		Ids []int `json:"ids"` // Ambil ID dari body
+	}
+
+	if err := c.BodyParser(&requestBody); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Gagal mem-parsing body request.",
+		})
+	}
+
+	ids := requestBody.Ids // Ambil ID dari request body
+
 	if len(ids) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Minimal 1 id_siswa harus diberikan.",
 		})
 	}
 
-	// Update semua status siswa menjadi 0
+	// Update status siswa
 	if err := db.Model(&models.Siswa{}).
 		Where("id_siswa IN ?", ids).
-		Update("status", 0).Error; err != nil {
+		Update("status", newStatus).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
 	return c.JSON(fiber.Map{
-		"message":  "Berhasil mengubah status siswa menjadi nonaktif.",
-		"id_siswa": ids,
+		"message":     "Berhasil mengubah status siswa.",
+		"id_siswa":    ids,
+		"status_baru": newStatus,
 	})
 }
