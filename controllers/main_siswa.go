@@ -111,7 +111,8 @@ func GetSiswaData(c *fiber.Ctx) error {
 		Joins("LEFT JOIN sub_siswa_jurusan ON sub_siswa_jurusan.id_siswa = main_siswa.id_siswa").
 		Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
 		Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
-		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel")
+		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
+		Where("main_siswa.status = 1")
 
 	if searchQuery != "" {
 		countQuery = countQuery.Where("main_siswa.nama_siswa LIKE ? OR main_siswa.nis LIKE ? OR main_siswa.nisn LIKE ?",
@@ -132,6 +133,7 @@ func GetSiswaData(c *fiber.Ctx) error {
 		Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
 		Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
 		Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
+        Where("main_siswa.status = 1").
 		Order(fmt.Sprintf("%s %s", sortBy, order)). // Tambahkan sorting
 		Limit(limit).Offset(offset)
 
@@ -188,23 +190,25 @@ func GetSiswaData(c *fiber.Ctx) error {
 func GetAllSiswaForExport(c *fiber.Ctx) error {
     db := config.DB
 
+    type Ekskul struct {
+        Nama  string `json:"nama"`
+        Warna string `json:"warna"`
+    }
+
     type ExportSiswa struct {
-        IDSiswa      int       `json:"id_siswa"`
-        KodeSiswa    string    `json:"kode_siswa"`
-        NISN         string    `json:"nisn"`
-        NIS          string    `json:"nis"`
-        NamaSiswa    string    `json:"nama_siswa"`
-        JenisKelamin string    `json:"jenis_kelamin"`
-        TahunMasuk   int       `json:"tahun_masuk"`
-        Foto         string    `json:"foto"`
-        Status       int       `json:"status"`
-        NamaKelas    string    `json:"nama_kelas"`
-        NamaJurusan  string    `json:"nama_jurusan"`
-        NamaRombel   string    `json:"nama_rombel"`
-        Ekskul       []struct {
-            Nama  string `json:"nama"`
-            Warna string `json:"warna"`
-        } `json:"ekskul"`
+        IDSiswa      int      `json:"id_siswa"`
+        KodeSiswa    string   `json:"kode_siswa"`
+        NISN         string   `json:"nisn"`
+        NIS          string   `json:"nis"`
+        NamaSiswa    string   `json:"nama_siswa"`
+        JenisKelamin string   `json:"jenis_kelamin"`
+        TahunMasuk   int      `json:"tahun_masuk"`
+        Foto         string   `json:"foto"`
+        Status       int      `json:"status"`
+        NamaKelas    string   `json:"nama_kelas"`
+        NamaJurusan  string   `json:"nama_jurusan"`
+        NamaRombel   string   `json:"nama_rombel"`
+        Ekskul       []Ekskul `json:"ekskul"`
     }
 
     var siswaList []struct {
@@ -222,7 +226,7 @@ func GetAllSiswaForExport(c *fiber.Ctx) error {
         NamaRombel   string
     }
 
-    // First get all student data without ekskul
+    // Ambil data siswa dengan data kelas, jurusan, dan rombel
     if err := db.Table("main_siswa").
         Select(`main_siswa.id_siswa, main_siswa.kode_siswa, main_siswa.nisn, main_siswa.nis,
                 main_siswa.nama_siswa, main_siswa.jenis_kelamin, main_siswa.tahun_masuk,
@@ -236,11 +240,12 @@ func GetAllSiswaForExport(c *fiber.Ctx) error {
         Joins("LEFT JOIN main_jurusan ON main_jurusan.id_jurusan = sub_siswa_jurusan.id_jurusan").
         Joins("LEFT JOIN sub_siswa_rombel ON sub_siswa_rombel.id_siswa = main_siswa.id_siswa").
         Joins("LEFT JOIN main_rombel ON main_rombel.id_rombel = sub_siswa_rombel.id_rombel").
+        Where("main_siswa.status = 1").
         Find(&siswaList).Error; err != nil {
         return c.Status(500).JSON(fiber.Map{"error": err.Error()})
     }
 
-    // Then get all ekskul data
+    // Ambil data ekskul
     var ekskulList []struct {
         IDSiswa int
         Nama    string
@@ -254,22 +259,16 @@ func GetAllSiswaForExport(c *fiber.Ctx) error {
         return c.Status(500).JSON(fiber.Map{"error": err.Error()})
     }
 
-    // Group ekskul by siswa
-    ekskulMap := make(map[int][]struct {
-        Nama  string `json:"nama"`
-        Warna string `json:"warna"`
-    })
+    // Kelompokkan ekskul berdasarkan siswa
+    ekskulMap := make(map[int][]Ekskul)
     for _, ekskul := range ekskulList {
-        ekskulMap[ekskul.IDSiswa] = append(ekskulMap[ekskul.IDSiswa], struct {
-            Nama  string `json:"nama"`
-            Warna string `json:"warna"`
-        }{
+        ekskulMap[ekskul.IDSiswa] = append(ekskulMap[ekskul.IDSiswa], Ekskul{
             Nama:  ekskul.Nama,
             Warna: ekskul.Warna,
         })
     }
 
-    // Combine the data
+    // Gabungkan data siswa dan ekskul
     var response []ExportSiswa
     for _, siswa := range siswaList {
         response = append(response, ExportSiswa{
@@ -296,12 +295,13 @@ func GetAllSiswaForExport(c *fiber.Ctx) error {
     })
 }
 
+
 // Get all student IDs
 func GetAllStudentIDs(c *fiber.Ctx) error {
 	db := config.DB
 
 	var ids []int
-	query := db.Table("main_siswa").Pluck("id_siswa", &ids)
+	query := db.Table("main_siswa").Where("status = 1").Pluck("id_siswa", &ids)
 
 	if err := query.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -312,5 +312,43 @@ func GetAllStudentIDs(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"data": ids,
+	})
+}
+
+func UpdateStatusSiswaToInactive(c *fiber.Ctx) error {
+	db := config.DB
+
+	// Ambil semua query id (meskipun hanya 1 id tetap akan masuk slice)
+	queryArgs := c.Request().URI().QueryArgs()
+	var ids []int
+
+	queryArgs.VisitAll(func(key, value []byte) {
+		if string(key) == "id" {
+			id, err := strconv.Atoi(string(value))
+			if err == nil {
+				ids = append(ids, id)
+			}
+		}
+	})
+
+	// Cek apakah ada id yang valid
+	if len(ids) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Minimal 1 id_siswa harus diberikan.",
+		})
+	}
+
+	// Update semua status siswa menjadi 0
+	if err := db.Model(&models.Siswa{}).
+		Where("id_siswa IN ?", ids).
+		Update("status", 0).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":  "Berhasil mengubah status siswa menjadi nonaktif.",
+		"id_siswa": ids,
 	})
 }

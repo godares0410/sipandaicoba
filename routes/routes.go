@@ -14,6 +14,7 @@ func SetupRoutes(app *fiber.App) {
 	app.Get("/siswa", controllers.GetSiswaData)
 	app.Get("/idsiswa", controllers.GetAllStudentIDs)
 	app.Get("/siswa/all", controllers.GetAllSiswaForExport)
+	app.Put("/siswa/arsip", controllers.UpdateStatusSiswaToInactive)
 	app.Post("/dummy", controllers.CreateDummyData)
 	app.Post("/dummyjurusan", controllers.CreateDummyMainJurusanData)
 	app.Post("/dummyekskul", controllers.CreateDummyEkskulData)
