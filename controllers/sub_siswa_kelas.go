@@ -9,6 +9,16 @@ import (
 	"sipandai/models"
 )
 
+func GetSiswaKelas(c *fiber.Ctx) error {
+    idSiswa := c.Params("id")
+    var siswaKelas models.SubSiswaKelas
+    
+    if err := config.DB.Where("id_siswa = ?", idSiswa).First(&siswaKelas).Error; err != nil {
+        return c.Status(404).JSON(fiber.Map{"error": "Data tidak ditemukan"})
+    }
+    
+    return c.JSON(siswaKelas)
+}
 func CreateDummySubSiswaKelasData(c *fiber.Ctx) error {
 	db := config.DB
 

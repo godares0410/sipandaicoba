@@ -24,6 +24,18 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/dummysk", controllers.CreateDummySubSiswaKelasData)
 	app.Post("/dummysj", controllers.CreateDummySubSiswaJurusanData)
 	app.Post("/dummysr", controllers.CreateDummySubSiswaRombelData)
+	app.Delete("/siswa", controllers.BulkDeleteSiswa)
+	// routes.go
+	app.Get("/ekskul", controllers.GetEkskulOptions)
+	app.Get("/kelas", controllers.GetKelasOptions)
+	app.Get("/jurusan", controllers.GetJurusanOptions)
+	app.Get("/rombel", controllers.GetRombelOptions)
+	app.Get("/siswa/:id/ekskul", controllers.GetSiswaEkskul)
+	app.Get("/siswa/{id}/kelas", controllers.GetSiswaKelas)
+	app.Get("/siswa/{id}/jurusan", controllers.GetSiswaJurusan)
+	app.Get("/siswa/{id}/rombel", controllers.GetSiswaRombel)
+	app.Get("/siswa/:id/relations", controllers.GetSiswaRelations)
+	app.Put("/siswa/:id", controllers.UpdateSiswa)
 
 	// Test route lain
 	app.Get("/ping", func(c *fiber.Ctx) error {

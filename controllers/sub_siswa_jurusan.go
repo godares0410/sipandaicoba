@@ -9,7 +9,16 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 )
-
+func GetSiswaJurusan(c *fiber.Ctx) error {
+    idSiswa := c.Params("id")
+    var siswaJurusan models.SubSiswaJurusan
+    
+    if err := config.DB.Where("id_siswa = ?", idSiswa).First(&siswaJurusan).Error; err != nil {
+        return c.Status(404).JSON(fiber.Map{"error": "Data tidak ditemukan"})
+    }
+    
+    return c.JSON(siswaJurusan)
+}
 func CreateDummySubSiswaJurusanData(c *fiber.Ctx) error {
 	db := config.DB
 	tx := db.Begin()

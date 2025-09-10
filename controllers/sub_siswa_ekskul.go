@@ -56,3 +56,24 @@ func CreateDummySubSiswaEkskulData(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"message": "Dummy data untuk sub siswa ekskul berhasil dibuat!"})
 }
+
+// controllers/ekskul.go
+func GetEkskulList(c *fiber.Ctx) error {
+    var ekskulList []models.MainEkskul
+    if err := config.DB.Find(&ekskulList).Error; err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+    }
+    return c.JSON(fiber.Map{"data": ekskulList})
+}
+
+// controllers/siswa.go
+func GetSiswaEkskulList(c *fiber.Ctx) error {
+    idSiswa := c.Params("id")
+    var ekskulList []models.SubSiswaEkskul
+    
+    if err := config.DB.Where("id_siswa = ?", idSiswa).Find(&ekskulList).Error; err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+    }
+    
+    return c.JSON(fiber.Map{"data": ekskulList})
+}

@@ -1,3 +1,4 @@
+// /Users/admin/Documents/golang/models/main_siswa.go
 package models
 
 type Siswa struct {

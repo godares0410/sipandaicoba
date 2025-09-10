@@ -10,6 +10,17 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+func GetSiswaRombel(c *fiber.Ctx) error {
+    idSiswa := c.Params("id")
+    var siswaRombel models.SubSiswaRombel
+    
+    if err := config.DB.Where("id_siswa = ?", idSiswa).First(&siswaRombel).Error; err != nil {
+        return c.Status(404).JSON(fiber.Map{"error": "Data tidak ditemukan"})
+    }
+    
+    return c.JSON(siswaRombel)
+}
+
 func CreateDummySubSiswaRombelData(c *fiber.Ctx) error {
 	db := config.DB
 	tx := db.Begin()
